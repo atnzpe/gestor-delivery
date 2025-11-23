@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Delivery App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    /* UX Refinements */
+    body {
+      font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+      background-color: #F3F4F6;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .loader {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #4F46E5;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .card-shadow {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    .sticky-cart {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 50;
+    }
+
+    /* Modal Animation */
+    .modal-enter {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    .modal-enter-active {
+      opacity: 1;
+      transform: scale(1);
+      transition: all 0.2s ease-out;
+    }
+  </style>
+</head>
+
+<body class="text-gray-800">
+
+  <header class="bg-indigo-600 text-white p-4 shadow-md sticky top-0 z-40">
+    <div class="flex justify-between items-center max-w-2xl mx-auto">
+      <h1 class="text-xl font-bold flex items-center gap-2">
+        <span class="material-icons">restaurant_menu</span> Cardápio Digital
+      </h1>
+      <button onclick="openCart()" class="relative p-2">
+        <span class="material-icons">shopping_cart</span>
+        <span id="cart-badge" class="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center hidden">0</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto p-4 pb-24">
+
+    <div class="mb-6 relative">
+      <input type="text" id="search" placeholder="Buscar delícias..." class="w-full p-3 pl-10 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm" onkeyup="filterMenu()">
+      <span class="material-icons absolute left-3 top-3 text-gray-400">search</span>
+    </div>
+
+    <div id="loader-main" class="flex flex-col items-center justify-center py-12">
+      <div class="loader mb-2"></div>
+      <p class="text-gray-500 text-sm">Carregando cardápio...</p>
+    </div>
+
+    <div id="menu-container" class="space-y-8 hidden">
+    </div>
+  </main>
+
+  <div id="modal-product"
+    class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity duration-300">
+
+    <div class="bg-white w-full sm:max-w-md sm:rounded-xl rounded-t-2xl flex flex-col max-h-[90vh] shadow-2xl">
+
+      <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl shrink-0">
+        <h3 class="font-bold text-lg text-gray-800 truncate pr-4" id="modal-prod-name">Nome Produto</h3>
+        <button onclick="closeProductModal()" class="text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-gray-200 transition">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto p-4 flex-1 bg-white">
+
+        <div class="relative mb-4 group">
+          <img id="modal-prod-img"
+                 class="w-full h-48 sm:h-60 object-contain rounded-lg hidden shadow-sm border border-gray-100 bg-gray-50 cursor-zoom-in"
+                 src=""
+                 alt="Foto do Produto"
+                 onclick="expandImage(this.src)">
+
+          <div id="zoom-hint"
+            class="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded pointer-events-none hidden">
+            <span class="material-icons text-[10px] align-middle">zoom_in</span> Ampliar
+          </div>
+        </div>
+
+        <div id="modal-prod-desc" class="text-gray-600 text-sm mb-4 leading-relaxed"></div>
+
+        <div class="font-bold text-indigo-600 text-xl mb-4 bg-indigo-50 inline-block px-3 py-1 rounded-lg"
+          id="modal-prod-price">R$ 0.00</div>
+
+        <div id="modal-addons-area" class="hidden mb-4">
+          <h4 class="font-semibold text-gray-700 mb-2 text-sm uppercase tracking-wide text-xs text-gray-500">Adicionais
+          </h4>
+          <div id="modal-addons-list" class="space-y-2"></div>
+        </div>
+
+        <div class="mt-2">
+          <label class="text-xs font-bold text-gray-500 uppercase mb-1 block">Observação</label>
+          <textarea id="modal-obs" rows="2" class="w-full p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none" placeholder="Ex: Sem cebola..."></textarea>
+        </div>
+      </div>
+
+      <div class="p-4 border-t bg-white flex justify-between items-center shrink-0 safe-area-bottom">
+        <div class="flex items-center border border-gray-300 rounded-lg mr-3">
+          <button onclick="changeModalQty(-1)" class="px-3 py-2 text-indigo-600 hover:bg-indigo-50 rounded-l-lg font-bold text-lg">-</button>
+          <span id="modal-qty" class="px-3 font-bold text-gray-700 min-w-[2rem] text-center">1</span>
+          <button onclick="changeModalQty(1)" class="px-3 py-2 text-indigo-600 hover:bg-indigo-50 rounded-r-lg font-bold text-lg">+</button>
+        </div>
+        <button onclick="confirmAddCart()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-lg font-bold shadow-lg active:scale-95 transition-transform flex justify-between items-center">
+          <span>Adicionar</span>
+          <span id="modal-btn-total" class="bg-indigo-800 bg-opacity-30 px-2 py-0.5 rounded text-sm">R$ 0.00</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="zoom-modal"
+    class="fixed inset-0 bg-black bg-opacity-95 z-[60] hidden flex items-center justify-center cursor-zoom-out p-2"
+    onclick="closeZoom()">
+    <img id="zoom-img" class="max-w-full max-h-full object-contain rounded shadow-2xl transform transition-transform duration-200 scale-95" src="">
+    <button class="absolute top-4 right-4 text-white bg-gray-800 bg-opacity-50 rounded-full p-2 hover:bg-opacity-80">
+        <span class="material-icons text-3xl">close</span>
+     </button>
+  </div>
+
+  <div id="modal-cart" class="fixed inset-0 bg-white z-50 hidden flex flex-col">
+    <header class="p-4 border-b flex justify-between items-center bg-gray-50">
+      <button onclick="closeCart()" class="flex items-center text-gray-600"><span class="material-icons mr-1">arrow_back</span> Voltar</button>
+      <h2 class="font-bold text-lg">Seu Pedido</h2>
+      <div class="w-16"></div>
+    </header>
+
+    <div class="flex-1 overflow-y-auto p-4">
+      <div id="cart-items-list" class="space-y-4"></div>
+
+      <div class="mt-6 border-t pt-4 space-y-3">
+        <h3 class="font-bold text-gray-800">Dados para Entrega</h3>
+        <input type="text" id="cli-nome" placeholder="Seu Nome" class="w-full p-2 border rounded">
+        <input type="tel" id="cli-tel" placeholder="Seu Telefone (WhatsApp)" class="w-full p-2 border rounded">
+
+        <div class="grid grid-cols-3 gap-2">
+          <input type="text" id="cli-rua" placeholder="Rua/Av" class="col-span-2 p-2 border rounded">
+          <input type="text" id="cli-num" placeholder="Nº" class="p-2 border rounded">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Bairro de Entrega *</label>
+          <select id="select-bairro" name="bairro" required onchange="atualizarTaxaEntrega()"
+              class="w-full p-2 border rounded bg-white focus:ring-orange-500 focus:border-orange-500">
+              <option value="" disabled selected>Carregando bairros...</option>
+            </select>
+          <input type="hidden" name="taxaEntregaValor" id="input-taxa-valor" value="0">
+        </div>
+
+        <input type="text" id="cli-ref" placeholder="Ponto de Referência (Opcional)" class="w-full p-2 border rounded">
+
+        <h3 class="font-bold text-gray-800 mt-4">Pagamento</h3>
+        <select id="cli-pag" name="pagamento" required class="w-full p-2 border rounded bg-white">
+            <option value="" disabled selected>Carregando opções...</option>
+         </select>
+      </div>
+    </div>
+
+    <div class="p-4 border-t bg-gray-50">
+      <div class="space-y-1 mb-4 text-sm text-gray-600">
+        <div class="flex justify-between">
+          <span>Subtotal:</span>
+          <span id="cart-subtotal-price">R$ 0.00</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Taxa de Entrega:</span>
+          <span id="taxa-entrega" class="font-bold">R$ 0.00</span>
+        </div>
+      </div>
+      <div class="flex justify-between mb-4 text-lg font-bold border-t pt-2 text-gray-900">
+        <span>Total:</span>
+        <span id="cart-total-price">R$ 0.00</span>
+      </div>
+
+      <button onclick="submitOrder()" id="btn-submit" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg text-lg">
+         Concluir Pedido via WhatsApp
+       </button>
+      <p id="msg-error" class="text-red-500 text-sm text-center mt-2 hidden"></p>
+    </div>
+  </div>
+
+  <script>
+    // --- NOVAS FUNÇÕES DE ZOOM ---
+    
+    function expandImage(src) {
+        const modal = document.getElementById('zoom-modal');
+        const img = document.getElementById('zoom-img');
+        img.src = src;
+        modal.classList.remove('hidden');
+        // Pequena animação
+        setTimeout(() => img.classList.remove('scale-95'), 10);
+    }
+
+    function closeZoom() {
+        const modal = document.getElementById('zoom-modal');
+        const img = document.getElementById('zoom-img');
+        img.classList.add('scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    // ESTADO DA APLICAÇÃO
+    let menuData = {}; // { Categoria: [Itens] }
+    let currentProduct = null; // Produto sendo visualizado no modal
+    let cart = [];
+    let modalQty = 1;
+    let valorTotalProdutos = 0; // Armazena o subtotal dos produtos
+
+    // --- INICIALIZAÇÃO ---
+    window.addEventListener('load', () => {
+      google.script.run.withSuccessHandler(renderMenu).getCardapioParaDelivery();
+      carregarListaBairros(); // Carrega os bairros assim que a página abre
+      carregarFormasPagamento();
+    });
+
+    // --- Função Nova: Carregar Pagamentos ---
+    function carregarFormasPagamento() {
+       google.script.run
+         .withSuccessHandler(opcoes => {
+            const select = document.getElementById('cli-pag');
+            select.innerHTML = '<option value="" disabled selected>Selecione a forma de pagamento...</option>';
+            
+            opcoes.forEach(pag => {
+               const opt = document.createElement('option');
+               opt.value = pag;
+               opt.textContent = pag;
+               select.appendChild(opt);
+            });
+         })
+         .getPagamentosParaDelivery();
+    }
+
+    // --- FUNÇÕES DE BAIRRO E TAXA ---
+    function carregarListaBairros() {
+      google.script.run
+        .withSuccessHandler(preencherSelectBairros)
+        .getBairrosParaDelivery();
+    }
+
+    function preencherSelectBairros(lista) {
+      const select = document.getElementById('select-bairro');
+      select.innerHTML = '<option value="" disabled selected>Selecione seu Bairro...</option>';
+      
+      lista.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.bairro;
+        option.textContent = `${item.bairro} (+ R$ ${item.taxa.toFixed(2)})`;
+        option.dataset.taxa = item.taxa; // Guarda a taxa no elemento
+        select.appendChild(option);
+      });
+
+      // Opção Padrão Obrigatória
+      const optOutro = document.createElement('option');
+      optOutro.value = "Outro/Não Encontrado";
+      optOutro.textContent = "Outro Bairro (Taxa a combinar)";
+      optOutro.dataset.taxa = "0";
+      select.appendChild(optOutro);
+    }
+
+    function atualizarTaxaEntrega() {
+      const select = document.getElementById('select-bairro');
+      const spanTaxa = document.getElementById('taxa-entrega'); 
+      const spanTotal = document.getElementById('cart-total-price'); 
+      const inputTaxaHidden = document.getElementById('input-taxa-valor'); 
+
+      // Pega taxa do option selecionado
+      const selectedOption = select.options[select.selectedIndex];
+      let taxa = 0;
+      
+      if (selectedOption && selectedOption.dataset.taxa) {
+        taxa = parseFloat(selectedOption.dataset.taxa);
+      }
+
+      // Atualiza input hidden
+      inputTaxaHidden.value = taxa;
+
+      // Atualiza Texto Visual da Taxa
+      if (select.value === "Outro/Não Encontrado") {
+         spanTaxa.textContent = "A combinar";
+         spanTaxa.className = "text-red-500 font-bold";
+      } else {
+         spanTaxa.textContent = `R$ ${taxa.toFixed(2)}`;
+         spanTaxa.className = "font-bold";
+      }
+
+      // Recalcula Total Geral (Produtos + Taxa)
+      const totalFinal = valorTotalProdutos + taxa;
+      spanTotal.textContent = `R$ ${totalFinal.toFixed(2)}`;
+    }
+
+    function renderMenu(data) {
+      document.getElementById('loader-main').style.display = 'none';
+      const container = document.getElementById('menu-container');
+      menuData = data;
+      container.innerHTML = '';
+      container.classList.remove('hidden');
+
+      for (const [categoria, itens] of Object.entries(data)) {
+        if(itens.length === 0) continue;
+        
+        const section = document.createElement('div');
+        section.innerHTML = `<h2 class="text-xl font-bold text-gray-800 mb-3 border-b pb-1">${categoria}</h2>`;
+        
+        const grid = document.createElement('div');
+        grid.className = 'grid gap-4';
+        
+        itens.forEach(item => {
+          // Lógica: Se tiver adicionais, texto muda para "Ver opções"
+          const hasAddons = item.adicionaisPermitidos && item.adicionaisPermitidos.length > 0;
+          const btnText = hasAddons ? 'Ver Opções' : 'Adicionar';
+          
+          const card = document.createElement('div');
+          card.className = 'bg-white p-4 rounded-xl card-shadow flex justify-between items-center cursor-pointer active:bg-gray-50';
+          card.onclick = () => openProductModal(item); // Clique no card abre modal
+
+          card.innerHTML = `
+            <div class="flex-1 pr-4">
+              <h3 class="font-bold text-gray-900">${item.nome}</h3>
+              <p class="text-sm text-gray-500 line-clamp-2">${item.descricao || ''}</p>
+              <p class="text-indigo-600 font-bold mt-1">R$ ${item.preco.toFixed(2)}</p>
+            </div>
+            ${item.foto_url ? `<img src="${item.foto_url}" class="w-20 h-20 object-cover rounded-lg bg-gray-200">` : ''}
+          `;
+          grid.appendChild(card);
+        });
+        
+        section.appendChild(grid);
+        container.appendChild(section);
+      }
+    }
+
+    // --- LÓGICA DO MODAL DE PRODUTO (CRÍTICO PARA UX DE ADICIONAIS) ---
+    function openProductModal(item) {
+      currentProduct = item;
+      modalQty = 1;
+
+      document.getElementById('modal-prod-name').textContent = item.nome;
+      document.getElementById('modal-prod-desc').textContent = item.descricao || '';
+      document.getElementById('modal-prod-price').textContent = `R$ ${item.preco.toFixed(2)}`;
+      document.getElementById('modal-obs').value = '';
+      document.getElementById('modal-qty').textContent = '1';
+
+      // --- ATUALIZAÇÃO DA IMAGEM E ZOOM ---
+      const imgEl = document.getElementById('modal-prod-img');
+      const hintEl = document.getElementById('zoom-hint'); // Elemento da lupa
+
+      if (item.foto_url && item.foto_url.trim() !== "") {
+          imgEl.src = item.foto_url;
+          imgEl.classList.remove('hidden');
+          if(hintEl) hintEl.classList.remove('hidden'); // Mostra ícone de lupa
+      } else {
+          imgEl.classList.add('hidden');
+          if(hintEl) hintEl.classList.add('hidden');
+      }
+      // ------------------------------------
+
+      const addonsArea = document.getElementById('modal-addons-area');
+      const addonsList = document.getElementById('modal-addons-list');
+      addonsList.innerHTML = '';
+
+      if (item.adicionaisPermitidos && item.adicionaisPermitidos.length > 0) {
+        addonsArea.classList.remove('hidden');
+        item.adicionaisPermitidos.forEach(add => {
+          const div = document.createElement('div');
+          div.className = 'flex items-center justify-between p-2 border rounded hover:bg-gray-50';
+          div.innerHTML = `
+            <label class="flex items-center flex-1 cursor-pointer">
+              <input type="checkbox" value="${add.id}" data-price="${add.preco}" data-name="${add.nome}" class="addon-checkbox w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500" onchange="updateModalTotal()">
+              <span class="ml-2 text-gray-700">${add.nome}</span>
+            </label>
+            <span class="text-sm font-semibold text-gray-500">+ R$ ${add.preco.toFixed(2)}</span>
+          `;
+          addonsList.appendChild(div);
+        });
+      } else {
+        addonsArea.classList.add('hidden');
+      }
+
+      updateModalTotal();
+      document.getElementById('modal-product').classList.remove('hidden');
+    }
+
+    function closeProductModal() {
+      document.getElementById('modal-product').classList.add('hidden');
+    }
+
+    function changeModalQty(delta) {
+      modalQty += delta;
+      if(modalQty < 1) modalQty = 1;
+      document.getElementById('modal-qty').textContent = modalQty;
+      updateModalTotal();
+    }
+
+    function updateModalTotal() {
+      let total = currentProduct.preco;
+      
+      // Soma selecionados
+      document.querySelectorAll('.addon-checkbox:checked').forEach(cb => {
+        total += parseFloat(cb.dataset.price);
+      });
+
+      total = total * modalQty;
+      document.getElementById('modal-btn-total').textContent = `R$ ${total.toFixed(2)}`;
+    }
+
+    function confirmAddCart() {
+      // Coleta Adicionais
+      const selectedAddons = [];
+      document.querySelectorAll('.addon-checkbox:checked').forEach(cb => {
+        selectedAddons.push({
+          id: cb.value,
+          nome: cb.dataset.name,
+          preco: parseFloat(cb.dataset.price)
+        });
+      });
+
+      const obs = document.getElementById('modal-obs').value;
+
+      // Cria Objeto Item Carrinho
+      const cartItem = {
+        id: currentProduct.id,
+        nome: currentProduct.nome,
+        precoBase: currentProduct.preco,
+        qtde: modalQty,
+        adicionais: selectedAddons,
+        obs: obs,
+        // Calculo do preço unitário total para este combo
+        precoUnitarioTotal: currentProduct.preco + selectedAddons.reduce((sum, a) => sum + a.preco, 0)
+      };
+
+      cart.push(cartItem);
+      updateCartUI();
+      closeProductModal();
+      
+      // Feedback visual simples
+      const btn = document.querySelector('button[onclick="openCart()"]');
+      btn.classList.add('animate-bounce');
+      setTimeout(() => btn.classList.remove('animate-bounce'), 1000);
+    }
+
+    // --- CARRINHO & CHECKOUT ---
+    function updateCartUI() {
+      const badge = document.getElementById('cart-badge');
+      const count = cart.reduce((acc, item) => acc + item.qtde, 0);
+      badge.textContent = count;
+      badge.classList.toggle('hidden', count === 0);
+    }
+
+    function openCart() {
+      const list = document.getElementById('cart-items-list');
+      list.innerHTML = '';
+      valorTotalProdutos = 0; // Reseta para recalcular
+
+      if(cart.length === 0) {
+        list.innerHTML = '<p class="text-center text-gray-500 mt-10">Carrinho vazio 😢</p>';
+        // Reseta visuais
+        document.getElementById('cart-subtotal-price').textContent = `R$ 0.00`;
+        document.getElementById('cart-total-price').textContent = `R$ 0.00`;
+        document.getElementById('taxa-entrega').textContent = `R$ 0.00`;
+      } else {
+        cart.forEach((item, index) => {
+          const subtotal = item.precoUnitarioTotal * item.qtde;
+          valorTotalProdutos += subtotal;
+
+          // Texto dos adicionais
+          const addonsText = item.adicionais.map(a => `+ ${a.nome}`).join(', ');
+
+          const div = document.createElement('div');
+          div.className = 'flex justify-between items-start bg-white p-3 rounded shadow-sm border';
+          div.innerHTML = `
+            <div>
+              <div class="font-bold">${item.qtde}x ${item.nome}</div>
+              ${addonsText ? `<div class="text-xs text-gray-500">${addonsText}</div>` : ''}
+              ${item.obs ? `<div class="text-xs text-orange-600 italic">Obs: ${item.obs}</div>` : ''}
+              <div class="text-indigo-600 font-bold mt-1">R$ ${subtotal.toFixed(2)}</div>
+            </div>
+            <button onclick="removeFromCart(${index})" class="text-red-400 p-2"><span class="material-icons text-sm">delete</span></button>
+          `;
+          list.appendChild(div);
+        });
+        
+        // Atualiza subtotal
+        document.getElementById('cart-subtotal-price').textContent = `R$ ${valorTotalProdutos.toFixed(2)}`;
+        // Chama função para somar taxa e atualizar total final
+        atualizarTaxaEntrega();
+      }
+
+      document.getElementById('modal-cart').classList.remove('hidden');
+    }
+
+    function closeCart() {
+      document.getElementById('modal-cart').classList.add('hidden');
+    }
+
+    function removeFromCart(index) {
+      cart.splice(index, 1);
+      openCart(); // Re-render
+      updateCartUI();
+    }
+
+    function submitOrder() {
+      const btn = document.getElementById('btn-submit');
+      const msg = document.getElementById('msg-error');
+      
+      // 1. Validação do Carrinho
+      if(cart.length === 0) {
+         showToast("Seu carrinho está vazio!");
+         return;
+      }
+
+      // 2. Coleta de Dados
+      const nome = document.getElementById('cli-nome').value.trim();
+      // Remove tudo que não é número do telefone para validar
+      const telRaw = document.getElementById('cli-tel').value.replace(/\D/g, ''); 
+      const rua = document.getElementById('cli-rua').value.trim();
+      const numeroCasa = document.getElementById('cli-num').value.trim();
+      const selectBairro = document.getElementById('select-bairro');
+      const bairro = selectBairro.value; 
+
+      // 3. Validações de UX (Regras de Negócio)
+      
+      // Nome: Mínimo 3 letras (evita "Eu", "A", "...")
+      if (nome.length < 3) {
+        msg.textContent = 'Por favor, digite seu nome completo (mínimo 3 letras).';
+        msg.classList.remove('hidden');
+        document.getElementById('cli-nome').focus();
+        return;
+      }
+
+      // Telefone: Deve ter entre 10 e 11 dígitos (DDD + Número)
+      if (telRaw.length < 10 || telRaw.length > 11) {
+        msg.textContent = 'Digite um telefone válido com DDD (apenas números).';
+        msg.classList.remove('hidden');
+        document.getElementById('cli-tel').focus();
+        return;
+      }
+
+      // Endereço
+      if (rua.length < 3 || numeroCasa === '') {
+        msg.textContent = 'Preencha o nome da Rua e o Número da casa.';
+        msg.classList.remove('hidden');
+        return;
+      }
+
+      // Bairro
+      if (!bairro || bairro === "") {
+        msg.textContent = 'Selecione o Bairro de entrega.';
+        msg.classList.remove('hidden');
+        return;
+      }
+
+      // Prepara Payload
+      const pedido = {
+        itens: cart,
+        clienteNome: nome,
+        clienteTelefone: telRaw, // Envia apenas números para o backend
+        logradouro: rua,
+        numero: numeroCasa,
+        bairro: bairro,
+        referencia: document.getElementById('cli-ref').value,
+        pagamento: document.getElementById('cli-pag').value
+      };
+
+      // UI Loading
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      msg.classList.add('hidden');
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          if(res.status === 'sucesso') {
+            cart = [];
+            updateCartUI();
+            closeCart();
+            window.open(res.mensagemWhatsApp, '_top');
+          } else {
+            msg.textContent = 'Erro: ' + res.message;
+            msg.classList.remove('hidden');
+            btn.disabled = false;
+            btn.textContent = 'Tentar Novamente';
+          }
+        })
+        .withFailureHandler((err) => {
+           msg.textContent = 'Erro de conexão: ' + err.message;
+           msg.classList.remove('hidden');
+           btn.disabled = false;
+        })
+        .processarPedidoDelivery(JSON.stringify(pedido));
+    }
+
+    function filterMenu() {
+      const term = document.getElementById('search').value.toLowerCase();
+      // Implementação simples de filtro escondendo divs que não batem
+      const filteredData = {};
+      
+      for (const [cat, itens] of Object.entries(menuData)) {
+        const matches = itens.filter(i => i.nome.toLowerCase().includes(term) || (i.descricao||'').toLowerCase().includes(term));
+        if(matches.length > 0) filteredData[cat] = matches;
+      }
+      
+      const container = document.getElementById('menu-container');
+      container.innerHTML = '';
+      
+      // Chamada manual de desenho simplificada para busca
+      for (const [categoria, itens] of Object.entries(filteredData)) {
+        const section = document.createElement('div');
+        section.innerHTML = `<h2 class="text-xl font-bold text-gray-800 mb-3">${categoria}</h2>`;
+        const grid = document.createElement('div');
+        grid.className = 'grid gap-4';
+        itens.forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'bg-white p-4 rounded-xl card-shadow flex justify-between items-center cursor-pointer';
+          card.onclick = () => openProductModal(item);
+          card.innerHTML = `
+             <div class="flex-1 pr-4">
+               <h3 class="font-bold text-gray-900">${item.nome}</h3>
+               <p class="text-indigo-600 font-bold">R$ ${item.preco.toFixed(2)}</p>
+             </div>
+          `;
+          grid.appendChild(card);
+        });
+        section.appendChild(grid);
+        container.appendChild(section);
+      }
+    }
+  </script>
+</body>
+
+</html>

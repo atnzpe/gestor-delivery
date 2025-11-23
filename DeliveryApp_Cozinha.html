@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor KDS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    body {
+      background-color: #1f2937;
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    /* Cores de Status Vibrantes */
+    .status-NOVO {
+      border-top: 6px solid #ef4444;
+      background: #2d3748;
+    }
+
+    .status-PREPARANDO {
+      border-top: 6px solid #f59e0b;
+      background: #2d3748;
+    }
+
+    .status-EMBALAGEM {
+      border-top: 6px solid #3b82f6;
+      background: #2d3748;
+    }
+
+    .status-PRONTO_ENTREGA {
+      border-top: 6px solid #10b981;
+      background: #2d3748;
+    }
+
+    .status-SAIU_ENTREGA {
+      border-top: 6px solid #8b5cf6;
+      background: #1f2937;
+      opacity: 0.9;
+    }
+
+    .status-ENTREGUE {
+      border-top: 6px solid #6b7280;
+      background: #111827;
+      opacity: 0.6;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .blink {
+      animation: blinker 2s linear infinite;
+    }
+
+    @keyframes blinker {
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    /* Animação do Modal */
+    .modal-content {
+      animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+
+<body class="p-4">
+
+  <header
+    class="flex flex-wrap justify-between items-center mb-6 bg-gray-800 p-4 rounded-lg shadow-lg sticky top-0 z-40">
+    <div class="flex items-center gap-3 mb-2 sm:mb-0">
+      <span class="material-icons text-orange-500 text-4xl">soup_kitchen</span>
+      <div>
+        <h1 class="text-2xl font-bold tracking-wide">Cozinha / KDS</h1>
+        <p class="text-xs text-gray-400" id="last-update">Carregando...</p>
+      </div>
+    </div>
+
+    <div class="flex gap-2 w-full sm:w-auto">
+      <select id="filtro-status" class="flex-1 text-gray-900 p-2 rounded font-bold focus:ring-2 focus:ring-orange-500" onchange="renderCards()">
+        <option value="TODOS">Todos Ativos</option>
+        <option value="NOVO">Apenas Novos</option>
+        <option value="PROCESSO">Em Processo</option>
+        <option value="FINALIZADOS">Histórico (24h)</option>
+      </select>
+      <button onclick="forceRefresh()" class="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded shadow transition flex items-center justify-center">
+        <span class="material-icons">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <div id="board" class="card-grid pb-20"></div>
+
+  <div id="modal" class="fixed inset-0 bg-black bg-opacity-90 hidden flex items-center justify-center z-50 p-2">
+    <div
+      class="bg-white text-gray-900 rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] modal-content">
+
+      <div class="bg-gray-100 p-4 border-b flex justify-between items-center">
+        <h2 class="text-xl font-bold flex items-center gap-2">
+          <span class="material-icons text-gray-600">receipt_long</span>
+          <span id="modal-id" class="text-orange-600">#000</span>
+        </h2>
+        <button onclick="closeModal()" class="text-gray-500 hover:text-red-600 p-2">
+            <span class="material-icons text-3xl">close</span>
+         </button>
+      </div>
+
+      <div class="p-4 overflow-y-auto flex-1">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
+          <div>
+            <p class="text-xs text-gray-500 uppercase font-bold">Cliente</p>
+            <p class="text-lg font-semibold truncate" id="modal-cliente">-</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-500 uppercase font-bold">Telefone</p>
+            <p class="font-mono" id="modal-tel">-</p>
+          </div>
+          <div class="md:col-span-2">
+            <p class="text-xs text-gray-500 uppercase font-bold">Endereço</p>
+            <p id="modal-endereco" class="text-sm">-</p>
+          </div>
+          <div class="md:col-span-2 hidden" id="modal-obs-geral-container">
+            <p class="text-xs text-red-500 uppercase font-bold">Observação Geral</p>
+            <p class="text-red-600 font-bold bg-red-50 p-2 rounded border border-red-200" id="modal-obs-geral">-</p>
+          </div>
+        </div>
+
+        <h3 class="font-bold text-lg mb-3 border-b pb-1 flex justify-between">
+          Itens do Pedido
+          <span class="text-sm font-normal text-gray-500 bg-gray-200 px-2 rounded" id="modal-pagamento">PIX</span>
+        </h3>
+        <div id="modal-itens" class="space-y-2">
+        </div>
+      </div>
+
+      <div class="p-3 bg-gray-100 border-t">
+        <p class="text-xs font-bold text-gray-500 mb-2 text-center uppercase">Alterar Status & Notificar Cliente</p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2" id="status-actions">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let todosPedidos = [];
+    let autoRefresh;
+    let pedidoAtual = null;
+
+    // Inicialização segura
+    window.onload = () => {
+      renderCards(); 
+      loadPedidos(); 
+      autoRefresh = setInterval(loadPedidos, 30000); 
+    };
+
+    function forceRefresh() {
+      document.getElementById('last-update').textContent = 'Forçando atualização...';
+      loadPedidos();
+    }
+
+    function loadPedidos() {
+      google.script.run
+        .withSuccessHandler(data => {
+          todosPedidos = data || [];
+          const now = new Date();
+          document.getElementById('last-update').textContent = 'Atualizado: ' + now.toLocaleTimeString();
+          renderCards();
+        })
+        .withFailureHandler(err => {
+          document.getElementById('last-update').textContent = 'Erro de conexão';
+          console.error('Erro ao buscar pedidos:', err);
+        })
+        .getPedidosCozinha();
+    }
+
+    function renderCards() {
+      const board = document.getElementById('board');
+      const filtro = document.getElementById('filtro-status').value;
+      board.innerHTML = '';
+
+      if (!todosPedidos || todosPedidos.length === 0) {
+        board.innerHTML = '<div class="col-span-full text-center text-gray-500 mt-10 text-xl">Nenhum pedido encontrado.</div>';
+        return;
+      }
+
+      let filtrados = todosPedidos;
+
+      if (filtro === 'NOVO') {
+        filtrados = todosPedidos.filter(p => p.status === 'NOVO');
+      } else if (filtro === 'PROCESSO') {
+        filtrados = todosPedidos.filter(p => ['PREPARANDO', 'EMBALAGEM', 'PRONTO_ENTREGA', 'SAIU_ENTREGA'].includes(p.status));
+      } else if (filtro === 'TODOS') {
+        filtrados = todosPedidos.filter(p => p.status !== 'ENTREGUE' && p.status !== 'CANCELADO');
+      } else if (filtro === 'FINALIZADOS') {
+        filtrados = todosPedidos.filter(p => p.status === 'ENTREGUE' || p.status === 'CANCELADO');
+      }
+
+      if (filtrados.length === 0) {
+        board.innerHTML = '<div class="col-span-full text-center text-gray-500 mt-10">Nenhum pedido nesta categoria.</div>';
+        return;
+      }
+
+      filtrados.forEach((p, index) => {
+        const dt = new Date(p.dataHora);
+        const dataFormatada = !isNaN(dt)
+          ? `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`
+          : '--/--';
+
+        // [NOVO] Formatação de Moeda
+        const valorFormatado = parseFloat(p.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const div = document.createElement('div');
+        div.className = `p-4 rounded-lg shadow-lg cursor-pointer transform hover:-translate-y-1 transition duration-200 relative overflow-hidden status-${p.status || 'NOVO'}`;
+        
+        div.onclick = function () { openModal(p); };
+
+        const idDisplay = p.id && p.id.includes('-') ? '#' + p.id.split('-')[1] : p.id;
+        const isNovo = p.status === 'NOVO';
+
+        // Lógica Visual do Motoqueiro
+        let htmlMoto = '';
+        if (p.nomeMotoqueiro && (p.status === 'SAIU_ENTREGA' || p.status === 'ENTREGUE')) {
+            htmlMoto = `<div class="mt-2 bg-black bg-opacity-40 p-1 rounded text-xs flex items-center gap-1 text-yellow-300 font-bold">
+                          <span class="material-icons text-sm">two_wheeler</span> ${p.nomeMotoqueiro}
+                        </div>`;
+        }
+
+        div.innerHTML = `
+          <div class="flex justify-between items-start mb-3">
+            <span class="font-black text-xl ${isNovo ? 'text-red-400 blink' : 'text-white'}">${idDisplay}</span>
+            <span class="text-xs font-bold bg-black bg-opacity-30 px-2 py-1 rounded text-gray-200">${dataFormatada}</span>
+          </div>
+          
+          <div class="flex justify-between items-end mb-1">
+             <div class="font-bold text-lg text-white truncate flex-1 mr-2">${p.clienteNome || 'Cliente'}</div>
+             <div class="font-bold text-green-400 text-lg">${valorFormatado}</div>
+          </div>
+          
+          <div class="text-sm text-gray-300 mb-2 flex items-center gap-1">
+             <span class="material-icons text-sm">place</span> ${p.bairro || 'Retirada'}
+          </div>
+
+          ${htmlMoto}
+
+          <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-20 p-2 text-center mt-2">
+             <span class="text-xs font-bold uppercase tracking-wider">${p.status || 'NOVO'}</span>
+          </div>
+        `;
+        board.appendChild(div);
+      });
+    }
+
+    // --- MODAL & LÓGICA DE AÇÃO ---
+
+    function openModal(pedido) {
+      pedidoAtual = pedido;
+
+      document.getElementById('modal-id').textContent = pedido.id;
+      document.getElementById('modal-cliente').textContent = pedido.clienteNome;
+      document.getElementById('modal-tel').textContent = pedido.clienteTel;
+      document.getElementById('modal-endereco').textContent = `${pedido.logradouro || ''}, ${pedido.numero || ''} - ${pedido.bairro || ''} (${pedido.referencia || ''})`;
+      document.getElementById('modal-pagamento').textContent = pedido.pagamento || '-';
+
+      const obsDiv = document.getElementById('modal-obs-geral-container');
+      if (pedido.obs && pedido.obs !== 'undefined') {
+        obsDiv.classList.remove('hidden');
+        document.getElementById('modal-obs-geral').textContent = pedido.obs;
+      } else {
+        obsDiv.classList.add('hidden');
+      }
+
+      const listaItens = document.getElementById('modal-itens');
+      listaItens.innerHTML = '';
+
+      if (pedido.itens && Array.isArray(pedido.itens) && pedido.itens.length > 0) {
+        pedido.itens.forEach(item => {
+          let htmlAdds = '';
+          if (item.adicionais && Array.isArray(item.adicionais) && item.adicionais.length > 0) {
+            htmlAdds = item.adicionais.map(a => `<div class="text-sm text-gray-500 ml-8 flex items-center"><span class="text-xs mr-1">+</span> ${a.nome}</div>`).join('');
+          }
+          let htmlObsItem = item.obs ? `<div class="text-xs text-red-600 font-bold ml-8 mt-1 bg-red-50 inline-block px-2 rounded border border-red-100">⚠️ ${item.obs}</div>` : '';
+
+          const div = document.createElement('div');
+          div.className = 'border-b border-gray-100 pb-2 last:border-0 hover:bg-gray-50 p-1 rounded';
+          div.innerHTML = `
+                <div class="flex items-center gap-3">
+                   <span class="font-bold text-xl bg-gray-800 w-8 h-8 flex items-center justify-center rounded-full text-white shadow-sm">${item.qtde}</span>
+                   <span class="font-bold text-lg text-gray-800">${item.nome}</span>
+                </div>
+                ${htmlAdds}
+                ${htmlObsItem}
+             `;
+          listaItens.appendChild(div);
+        });
+      } else {
+        listaItens.innerHTML = '<p class="text-center text-gray-500 italic py-4">Sem itens listados.</p>';
+      }
+
+      renderActionButtons(pedido.status);
+
+      // Botão de Cancelar
+      const actionsDiv = document.getElementById('status-actions');
+      const oldCancel = document.getElementById('btn-cancel-order');
+      if (oldCancel) oldCancel.remove();
+
+      if (pedido.status !== 'CANCELADO' && pedido.status !== 'ENTREGUE') {
+        const btnCancel = document.createElement('button');
+        btnCancel.id = 'btn-cancel-order';
+        btnCancel.className = "col-span-full mt-4 border-2 border-red-500 text-red-600 font-bold py-2 rounded hover:bg-red-50 transition uppercase text-xs flex items-center justify-center gap-1";
+        btnCancel.innerHTML = "<span class='material-icons text-sm'>cancel</span> Cancelar Pedido";
+        btnCancel.onclick = () => {
+          if (confirm('🚨 ATENÇÃO: Deseja CANCELAR e ESTORNAR o estoque?')) {
+            alterarStatus('CANCELADO', btnCancel);
+          }
+        };
+        actionsDiv.parentNode.appendChild(btnCancel);
+      }
+
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    function renderActionButtons(currentStatus) {
+      const actionsDiv = document.getElementById('status-actions');
+      actionsDiv.innerHTML = '';
+
+      const steps = [
+        { id: 'PREPARANDO', label: 'Preparar', icon: 'skillet', color: 'bg-yellow-500 hover:bg-yellow-600' },
+        { id: 'EMBALAGEM', label: 'Embalar', icon: 'inventory_2', color: 'bg-blue-500 hover:bg-blue-600' },
+        { id: 'PRONTO_ENTREGA', label: 'Pronto', icon: 'check_circle', color: 'bg-green-500 hover:bg-green-600' },
+        // Botão especial SAIU
+        { id: 'SAIU_ENTREGA', label: 'Saiu', icon: 'two_wheeler', color: 'bg-purple-500 hover:bg-purple-600' },
+        { id: 'ENTREGUE', label: 'Finalizar', icon: 'done_all', color: 'bg-gray-700 hover:bg-gray-800' }
+      ];
+
+      steps.forEach(step => {
+        const isCurrent = currentStatus === step.id;
+        const btn = document.createElement('button');
+        btn.className = `${step.color} text-white p-2 rounded shadow flex flex-col items-center justify-center transition transform active:scale-95 ${isCurrent ? 'opacity-40 cursor-not-allowed ring-4 ring-gray-200' : ''}`;
+        btn.disabled = isCurrent;
+        
+        // INTERCEPTAÇÃO DO BOTÃO "SAIU"
+        if (step.id === 'SAIU_ENTREGA') {
+            btn.onclick = () => selecionarMotoqueiro(step.id, btn);
+        } else {
+            btn.onclick = () => alterarStatus(step.id, btn);
+        }
+
+        btn.innerHTML = `
+            <span class="material-icons mb-1 text-2xl">${step.icon}</span>
+            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wide">${step.label}</span>
+         `;
+        actionsDiv.appendChild(btn);
+      });
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+    }
+
+    // --- NOVA LÓGICA DE SELEÇÃO DE MOTOQUEIRO ---
+    
+    function selecionarMotoqueiro(novoStatus, btn) {
+        // Feedback visual de carregamento
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="material-icons animate-spin">refresh</span>';
+        
+        google.script.run.withSuccessHandler(motos => {
+            btn.innerHTML = originalText; // Restaura botão
+            
+            // Se não tiver motoqueiros cadastrados
+            if (motos.length === 0) {
+                if(confirm("⚠️ Nenhum motoqueiro cadastrado.\n\nDeseja despachar sem vincular entregador?")) {
+                    alterarStatus(novoStatus, btn, null);
+                }
+                return;
+            }
+            
+            // Cria um menu de seleção simples (Prompt)
+            // Futuramente pode ser um Modal Bonito, mas o Prompt é robusto e rápido.
+            let msg = "🛵 SELECIONE O ENTREGADOR:\n\n";
+            motos.forEach((m, i) => {
+                msg += `[ ${i + 1} ] ${m.nome}\n`;
+            });
+            msg += "\nDigite o NÚMERO do entregador:";
+            
+            const resp = prompt(msg);
+            
+            if (resp === null) return; // Cancelou
+            
+            const idx = parseInt(resp) - 1; // Ajuste Base 0
+            
+            if (!isNaN(idx) && motos[idx]) {
+                const moto = motos[idx];
+                if(confirm(`Confirma saída com ${moto.nome}?`)) {
+                    alterarStatus(novoStatus, btn, moto.id);
+                }
+            } else {
+                alert("❌ Opção inválida.");
+            }
+            
+        }).withFailureHandler(err => {
+            btn.innerHTML = originalText;
+            alert("Erro ao buscar motoqueiros: " + err.message);
+        }).getMotoqueirosAdmin();
+    }
+
+    function alterarStatus(novoStatus, btnElement, idMotoqueiro = null) {
+      if (!pedidoAtual) return;
+
+      const allBtns = document.querySelectorAll('#status-actions button');
+      allBtns.forEach(b => b.disabled = true);
+      
+      // Spinner no botão clicado
+      btnElement.innerHTML = '<span class="material-icons animate-spin">refresh</span>';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          pedidoAtual.status = novoStatus;
+          closeModal();
+          if (res.linkNotificacao) window.open(res.linkNotificacao, '_blank');
+          loadPedidos();
+        })
+        .withFailureHandler(err => {
+          alert('Erro ao atualizar: ' + err.message);
+          closeModal();
+        })
+        .atualizarStatusPedido(pedidoAtual.id, novoStatus, idMotoqueiro);
+    }
+  </script>
+
+
+</body>
+
+</html>

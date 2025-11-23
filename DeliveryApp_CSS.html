@@ -1,0 +1,229 @@
+<style>
+/* ============================================================================
+   @file DeliveryApp_CSS.html
+   @description Estilos da Interface do Web App de Delivery (v11.1 - UX/Responsive)
+   @author 
+   ----------------------------------------------------------------------------
+   Este CSS foi projetado para garantir:
+   - Responsividade fluida em qualquer dispositivo;
+   - Cards de categorias bem destacados e agradáveis;
+   - Estímulo visual positivo (apetite e alegria);
+   - Acessibilidade e performance visual.
+============================================================================ */
+
+/* ----------------------- VARIÁVEIS DE TEMA ------------------------------- */
+:root {
+  --cor-primaria: #F97316;              /* Laranja vibrante - estimula apetite */
+  --cor-primaria-hover: #EA580C;        /* Laranja escuro - ação */
+  --cor-secundaria: #22C55E;            /* Verde - frescor e naturalidade */
+  --cor-azul-suave: #3B82F6;            /* Azul para confiança e contraste */
+  --cor-texto: #374151;                 /* Cinza escuro - leitura */
+  --cor-fundo: #FFF9ED;                 /* Fundo amarelo cremoso */
+  --cor-card: #FFFFFF;                  /* Fundo dos cards */
+  --cor-sombra: rgba(0, 0, 0, 0.08);    /* Sombra suave */
+}
+
+/* ----------------------- BASE E LAYOUT GERAL ----------------------------- */
+body {
+  font-family: "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--cor-fundo);
+  color: var(--cor-texto);
+  padding-bottom: 12px;
+  margin: 0;
+  overflow-x: auto; /* Permite rolagem horizontal se necessário */
+  overflow-y: auto; /* Rolagem vertical automática */
+}
+
+/* Reset de foco */
+*:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ----------------------- LOADER PADRÃO ----------------------------------- */
+.loader {
+  border: 4px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 4px solid var(--cor-primaria);
+  width: 28px;
+  height: 28px;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ----------------------- SPLASH SCREEN ----------------------------------- */
+.splash-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 85vh;
+  text-align: center;
+}
+.splash-container h1 {
+  color: var(--cor-primaria);
+}
+.splash-container button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.splash-container button:hover {
+  transform: scale(1.03);
+  box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
+}
+
+/* ----------------------- BOTÕES E INTERAÇÕES ----------------------------- */
+button {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ----------------------- CARRINHO / ÍCONE TOPO --------------------------- */
+#nav-btn-carrinho {
+  fill: var(--cor-primaria);
+  color: var(--cor-primaria);
+  transition: transform 0.2s ease;
+}
+#nav-btn-carrinho:hover {
+  transform: scale(1.1);
+}
+
+/* ----------------------- CARDÁPIO (CATEGORIAS) --------------------------- */
+[data-categoria-card] {
+  background-color: var(--cor-card);
+  border-radius: 1rem;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 10px var(--cor-sombra);
+  padding: 1.2rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+[data-categoria-card]:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 18px var(--cor-sombra);
+}
+[data-categoria-nome] {
+  color: var(--cor-primaria-hover);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+/* Produtos dentro da categoria */
+[data-product-list] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+/* Item individual */
+[data-product-id] {
+  background-color: #fffdf7;
+  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #f4e2c1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+[data-product-id]:hover {
+  background-color: #fff4d9;
+}
+
+/* ----------------------- BOTÃO "ADICIONAR" ------------------------------- */
+.add-to-cart-btn {
+  border: 1px solid var(--cor-primaria);
+  color: var(--cor-primaria-hover);
+  background-color: #fffaf0;
+  transition: all 0.2s ease;
+}
+.add-to-cart-btn:hover {
+  background-color: var(--cor-primaria);
+  color: white;
+  transform: scale(1.05);
+}
+
+/* ----------------------- MODAL DE CHECKOUT ------------------------------- */
+#checkout-modal {
+  z-index: 999;
+  overflow-y: auto;
+}
+#checkout-modal .bg-white {
+  max-height: 90vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cor-primaria) #fef3c7;
+}
+
+/* Barra de rolagem (para navegadores modernos) */
+#checkout-modal .bg-white::-webkit-scrollbar {
+  width: 6px;
+}
+#checkout-modal .bg-white::-webkit-scrollbar-thumb {
+  background-color: var(--cor-primaria);
+  border-radius: 10px;
+}
+#checkout-modal .bg-white::-webkit-scrollbar-track {
+  background: #fff8e1;
+}
+
+/* ----------------------- TOAST / NOTIFICAÇÕES ---------------------------- */
+#toast-alert {
+  animation: fadeInOut 3s ease forwards;
+}
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(-20px); }
+  10%, 90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-20px); }
+}
+
+/* ----------------------- RESPONSIVIDADE TOTAL ---------------------------- */
+@media (max-width: 768px) {
+  /* Ajuste para celulares e tablets */
+  [data-categoria-card] {
+    padding: 1rem;
+  }
+  [data-product-id] {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .add-to-cart-btn {
+    width: 100%;
+    text-align: center;
+  }
+  #checkout-modal .bg-white {
+    width: 95%;
+    padding: 1rem;
+  }
+  #main-content, #splash-screen {
+    padding: 1rem;
+  }
+}
+
+/* Ajuste para telas grandes */
+@media (min-width: 1200px) {
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+  main, section, .splash-container {
+    max-width: 600px;
+    margin: auto;
+  }
+}
+
+/* ----------------------- MICROINTERAÇÕES UX ----------------------------- */
+button:active {
+  transform: scale(0.97);
+}
+[data-product-id]:active {
+  background-color: #ffedd5;
+}
+</style>

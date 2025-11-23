@@ -1,0 +1,153 @@
+✅
+❌
+
+🟢 ETAPA 1: CADASTROS BÁSICOS (Povoando o Banco)
+Menu: ➕ Cadastros (Criar)
+
+📦 Insumo (Estoque)
+
+[✅ ] Ação: Cadastrar insumo "Farinha Teste", Unidade "KG", Estoque "10".
+
+[✅ ] Validação: Verificar se apareceu na aba Estoque com ID gerado (ex: IN-1).
+
+🍔 Item Cardápio
+
+[✅ ] Ação: Cadastrar produto "Hambúrguer QA", Categoria "Lanches", Preço "20,00".
+
+[✅ ] Validação: Verificar se apareceu na aba Cardapio com ID CD-....
+
+🥓 Adicional
+
+[ ✅] Ação: Cadastrar adicional "Bacon Extra", Preço "5,00".
+
+[✅ ] Validação: Verificar se apareceu na aba Adicionais.
+
+🔗 Ligar Adicionais (Teste Crítico)
+
+[ ✅] Ação: Selecionar "Hambúrguer QA" e marcar a caixinha do "Bacon Extra". Salvar.
+
+[ ✅] Validação: Verificar se na aba Produto_Adicionais_Link apareceu uma linha vinculando os dois IDs.
+
+📝 Ficha Técnica (O Cérebro do Custo)
+
+[ ✅] Ação: Selecionar "Hambúrguer QA", Insumo "Farinha Teste", Qtd "0,2" (200g).
+
+[✅ ] Validação: Verificar aba Ficha Tecnica.
+
+[ ✅] Validação Extra: Volte na aba Cardapio e veja se a coluna CUSTO do hambúrguer mudou de 0 para algum valor (cálculo automático).
+
+📍 Taxas de Entrega
+
+[✅ ] Ação: Cadastrar Bairro "Centro", Taxa "5,00".
+
+[ ✅] Validação: Verificar aba Taxa_Entrega.
+
+💳 Formas de Pagamento
+
+[ ✅] Ação: Adicionar "Vale Refeição".
+
+[ ✅] Validação: Verificar aba Pagamentos.
+
+🏍️ Motoqueiro
+
+[✅ ] Ação: Cadastrar "João Motoboy", Placa "ABC-1234".
+
+[ ✅] Validação: Verificar aba Motoqueiros.
+
+🟡 ETAPA 2: EDIÇÃO E GERENCIAMENTO
+Menu: ✏️ Gerenciar (Editar)
+
+Cardápio
+
+[✅ ] Ação: Buscar "Hambúrguer QA", clicar em Editar, mudar preço para "25,00" e Salvar.
+
+[ ✅] Validação: O valor na aba Cardapio deve atualizar sem criar uma nova linha.
+
+Insumos
+
+[✅ ] Ação: Buscar "Farinha Teste", editar nome para "Farinha Premium".
+
+[✅ ] Validação: O nome deve mudar na aba Estoque.
+
+🔴 ETAPA 3: OPERAÇÃO (Vendas e Fluxo)
+Menu: 💰 Vendas & Estoque
+
+📄 Entrada de Nota (Lote)
+
+[ ✅] Ação: Adicionar entrada de +10KG para "Farinha Premium". Preço de compra R$ 50,00.
+
+[ ✅] Validação 1: Aba Compras deve ter o registro.
+
+[✅ ] Validação 2: Aba Estoque deve somar (10 inicial + 10 compra = 20).
+
+[ ✅] Validação 3: Aba Custo_Insumos deve atualizar o preço de custo.
+
+🖥️ Venda Balcão (PDV)
+
+[✅ ] Ação: Lançar venda do "Hambúrguer QA". Finalizar.
+
+[ ✅] Validação 1: Alerta de "Venda Realizada".
+
+[✅ ] Validação 2: Nova linha na aba Vendas com bairro "Balcão".
+
+[ ✅] Validação 3 (Baixa Estoque): O estoque da "Farinha" deve ter diminuído (20 - 0,2 = 19,8).
+
+📉 Ajuste Manual
+
+[ ] Ação: Selecionar "Farinha Premium", informar contagem real "15". Motivo: "Perda".
+
+[ ] Validação: Aba Estoque agora mostra 15. Aba LogEstoque mostra a perda.
+
+🔄 Recalcular Custos
+
+[ ] Ação: Clicar no botão.
+
+[ ] Validação: Mensagem de sucesso. (Garante que se o preço da farinha mudou, o custo do hambúrguer atualiza).
+
+📊 Atualizar Dashboard
+
+[ ] Ação: Clicar no botão.
+
+[ ] Validação: Aba DASHBOARD deve mostrar os valores da venda do PDV que fizemos acima.
+
+📑 Central de Relatórios
+
+[ ] Ação: Gerar "Extrato Vendas".
+
+[ ] Validação: Uma nova aba REL_VENDAS deve ser criada com os dados.
+
+🔵 ETAPA 4: LINKS E ACESSO EXTERNO
+Menu: Botões de Atalho
+
+🚀 ABRIR APP DELIVERY
+
+[ ] Ação: Clicar, abrir o link azul.
+
+[ ] Validação: O WebApp carrega o cardápio corretamente? O "Hambúrguer QA" aparece lá?
+
+👨‍🍳 ABRIR KDS COZINHA
+
+[ ] Ação: Clicar, abrir o link azul.
+
+[ ] Validação: A tela preta carrega? O pedido do PDV (Passo 12) aparece lá?
+
+[ ] Teste de Motoqueiro: Avance o pedido para "SAIU" -> Selecione "João Motoboy" -> Verifique se aparece a tarja amarela no card.
+
+📱 Configurar WhatsApp
+
+[ ] Ação: Mudar o número para um teste.
+
+[ ] Validação: Aba Config atualiza o número.
+
+💀 ETAPA 5: FINALIZAÇÃO (Reset)
+Menu: Rodapé
+
+🚨 LIMPAR DADOS TESTE
+
+[ ] Ação: Clicar e confirmar.
+
+[ ] Validação: As abas Vendas, Compras, LogEstoque devem ficar vazias (preservando apenas cabeçalhos). CUIDADO: Isso apaga tudo! Faça apenas no final.
+
+Recomendação: Copie essa lista para um bloco de notas ou imprima. Vá marcando um por um. Se o passo 4 (Ligar Adicionais) ou 5 (Ficha Técnica) falhar, o sistema de baixa de estoque não funcionará.
+
+Pode começar a bateria de testes! Estou aqui caso algum botão "grite" erro. 🕵️‍♂️🚀

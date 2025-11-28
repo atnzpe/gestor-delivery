@@ -3,7 +3,7 @@
 // ====================================================================
 
 const ID_PLANILHA_MESTRA = SpreadsheetApp.getActiveSpreadsheet().getId();
-
+const ABA_HORARIOS = 'Horarios';
 const ABA_ESTOQUE = 'Estoque';
 const ABA_CARDAPIO = 'Cardapio';
 const ABA_VENDAS = 'Vendas';
@@ -20,6 +20,8 @@ const ABA_PRECO_COMPRA_UNIDADE = 'Preço_CompraxUnidade';
 // NOVAS ABAS (Para o Roadmap)
 const ABA_MOTOQUEIROS = 'Motoqueiros';
 const ABA_DASHBOARD = 'DASHBOARD';
+const ABA_USUARIOS = 'Usuarios';
+const ABA_LOG_PEDIDO = 'LogPedido_Audit';
 
 
 // ====================================================================
@@ -89,7 +91,9 @@ function configurarPlanilha() {
     { nome: ABA_PRECO_COMPRA_UNIDADE, headers: ['ITEM', 'UNIDADES_DE_COMPRA', 'QTD_COMPRADA', 'PRECO_COMPRA', 'PRECO_TOTAL', 'PRECO_UNITARIO'] },
     { nome: ABA_PAGAMENTOS, headers: ['METODO', 'ATIVO'] },
     // NOVA ABA
-    { nome: ABA_MOTOQUEIROS, headers: ['ID', 'NOME', 'TELEFONE', 'PLACA', 'ATIVO'] }
+    { nome: ABA_MOTOQUEIROS, headers: ['ID', 'NOME', 'TELEFONE', 'PLACA', 'ATIVO'] },
+    { nome: ABA_USUARIOS, headers: ['ID_USUARIO', 'LOGIN', 'SENHA', 'NOME', 'FUNCAO', 'ATIVO'] },
+    { nome: ABA_LOG_PEDIDO, headers: ['DATA_HORA', 'ID_PEDIDO', 'DE_STATUS', 'PARA_STATUS', 'ID_USUARIO_RESPONSAVEL', 'NOME_USUARIO'] },
   ];
 
   estrutura.forEach(obj => {
@@ -120,7 +124,7 @@ function configurarPlanilha() {
 
 /**
  * @function onOpen
- * @description Menu Principal - Versão Final (Opção A: Compra em Lote Padrão)
+ * @description Menu Principal - Versão Final Corrigida
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
@@ -136,11 +140,15 @@ function onOpen() {
       .addSeparator()
       .addItem('📍 Taxas de Entrega', 'showSidebarGerenciarTaxas')
       .addItem('💳 Formas de Pagamento', 'showSidebarGerenciarPagamentos'))
+
     .addSeparator()
+
     .addSubMenu(ui.createMenu('✏️ Gerenciar (Editar)')
       .addItem('Cardápio', 'showSidebarGerenciarCardapio')
       .addItem('Insumos', 'showSidebarGerenciarInsumos'))
+
     .addSeparator()
+
     .addSubMenu(ui.createMenu('💰 Vendas & Estoque')
       .addItem('🖥️ Venda Balcão (PDV)', 'showSidebarVendaBalcao')
       .addItem('📄 Entrada de Nota (Lote)', 'showSidebarRegistrarCompraLote')
@@ -148,12 +156,22 @@ function onOpen() {
       .addItem('🔄 Recalcular Custos', 'uiRecalcularCustoDosProdutos')
       .addItem('📊 Atualizar Dashboard', 'uiAtualizarDashboard')
       .addItem('📑 Central de Relatórios', 'showSidebarRelatorios'))
+
     .addSeparator()
-    .addItem('🚀 ABRIR APP DELIVERY', 'showSidebarLinkDelivery') // [NOVO]
-    .addItem('👨‍🍳 ABRIR KDS COZINHA', 'showSidebarLinkKDS')     // [NOVO]
+
+    // --- CORREÇÃO AQUI: O addSubMenu abraça todos os itens ---
+    .addSubMenu(ui.createMenu('✏️ GESTÃO')
+      .addItem('👥 Gerenciar Usuários', 'showSidebarGerenciarUsuarios')
+      .addItem('⏰ Configurar Horários', 'showSidebarGerenciarHorarios')
+      .addItem('📱 Configurar WhatsApp', 'showSidebarConfigWhatsApp')
+      .addItem('🚨 LIMPAR DADOS TESTE', 'adminLimparDadosDeTeste'))
+    // O parêntese fecha AQUI, englobando tudo acima
+
     .addSeparator()
-    .addItem('📱 Configurar WhatsApp', 'showSidebarConfigWhatsApp')
-    .addItem('🚨 LIMPAR DADOS TESTE', 'adminLimparDadosDeTeste')
+
+    .addItem('🚀 ABRIR APP DELIVERY', 'showSidebarLinkDelivery')
+    .addItem('👨‍🍳 ABRIR KDS COZINHA', 'showSidebarLinkKDS')
+
     .addToUi();
 }
 // --- WRAPPERS (Funções que abrem as janelas laterais) ---
@@ -176,7 +194,8 @@ function showSidebarGerenciarInsumos() { openSidebar('GerenciarInsumos', 'Gerenc
 function showSidebarRegistrarCompraLote() { openSidebar('RegistrarCompraLote', 'Entrada de Nota'); }
 function showSidebarAjustarEstoque() { openSidebar('AjustarEstoque', 'Ajuste de Estoque'); }
 function showSidebarRelatorios() { openSidebar('CentralRelatorios', 'Central de Relatórios'); }
-
+function showSidebarGerenciarUsuarios() { openSidebar('GerenciarUsuarios', 'Equipe KDS'); }
+function showSidebarGerenciarHorarios() { openSidebar('GerenciarHorarios', 'Horários'); }
 // Função Helper para abrir Sidebars
 function openSidebar(templateName, title) {
   try {
@@ -188,12 +207,368 @@ function openSidebar(templateName, title) {
   }
 }
 
+
+// ====================================================================
+// ⏰ MÓDULO: GESTÃO DE HORÁRIOS (V3 - BLINDADO)
+// ====================================================================
+
+// Helper para limpar hora (Transforma "Sat Dec 1899..." em "18:00")
+function formatarHoraPlanilha(valor) {
+  if (!valor) return "00:00";
+  // Se for objeto Data (erro comum do Sheets), extrai a hora
+  if (valor instanceof Date) {
+    const h = String(valor.getHours()).padStart(2, '0');
+    const m = String(valor.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  }
+  // Se for texto, limpa
+  return String(valor).trim();
+}
+
+function verificarStatusLoja() {
+  const ss = getPlanilha();
+
+  // 1. Verifica Trava Manual (Config)
+  const abaConfig = getSheet(ss, ABA_CONFIG);
+  const dadosConfig = abaConfig.getDataRange().getValues();
+  const trava = dadosConfig.find(r => r[0] === 'StatusManual');
+
+  if (trava) {
+    if (trava[1] === 'ABERTO') return { aberto: true, mensagem: 'Plantão (Manual)', modo: 'MANUAL' };
+    if (trava[1] === 'FECHADO') return { aberto: false, mensagem: 'Fechado temporariamente.', modo: 'MANUAL' };
+  }
+
+  // 2. Verifica Horário Automático
+  const abaHorarios = getSheetOrCreate(ss, ABA_HORARIOS, ['DIA_ID', 'DIA_NOME', 'ABERTO', 'INICIO', 'FIM']);
+
+  // Cria padrão se vazio
+  if (abaHorarios.getLastRow() <= 1) {
+    setupHorariosPadrao(abaHorarios);
+    return { aberto: false, mensagem: 'Configurando horários...', modo: 'AUTO' };
+  }
+
+  const agora = new Date();
+  const horaAtual = parseInt(Utilities.formatDate(agora, "GMT-3", "HHmm"));
+  const diaHoje = new Date().getDay(); // 0=Dom, 1=Seg...
+
+  const dados = abaHorarios.getDataRange().getValues();
+  dados.shift(); // Remove header
+
+  const regra = dados.find(r => r[0] == diaHoje);
+
+  // Se não tem regra ou está marcado como NAO
+  if (!regra || regra[2] !== 'SIM') {
+    return { aberto: false, mensagem: 'Não funcionamos hoje.', modo: 'AUTO' };
+  }
+
+  // Limpa e Converte Horários
+  const strInicio = formatarHoraPlanilha(regra[3]);
+  const strFim = formatarHoraPlanilha(regra[4]);
+
+  const inicio = parseInt(strInicio.replace(':', ''));
+  const fim = parseInt(strFim.replace(':', ''));
+
+  // Lógica de Madrugada (ex: abre 18:00 fecha 02:00)
+  let estaAberto = false;
+  if (fim < inicio) {
+    estaAberto = (horaAtual >= inicio) || (horaAtual < fim);
+  } else {
+    estaAberto = (horaAtual >= inicio && horaAtual < fim);
+  }
+
+  if (estaAberto) {
+    return { aberto: true, mensagem: `Aberto até ${strFim}`, modo: 'AUTO' };
+  } else {
+    return { aberto: false, mensagem: `Abre às ${strInicio}`, modo: 'AUTO' };
+  }
+}
+
+function salvarConfigHorarios(form) {
+  const ss = getPlanilha();
+  const sheet = getSheet(ss, ABA_HORARIOS);
+  const confSheet = getSheet(ss, ABA_CONFIG);
+  const status = form.statusGlobal;
+
+  // 1. Salva Status Manual
+  const confData = confSheet.getDataRange().getValues();
+  let found = false;
+  for (let i = 0; i < confData.length; i++) {
+    if (confData[i][0] === 'StatusManual') {
+      confSheet.getRange(i + 1, 2).setValue(status);
+      found = true; break;
+    }
+  }
+  if (!found) confSheet.appendRow(['StatusManual', status]);
+
+  // 2. Se for AUTO, salva a tabela
+  // Se for MANUAL, NÃO MEXE NA TABELA (Para não perder seus horários configurados)
+  if (status === 'AUTO') {
+    const novosDados = [];
+    const nomesDias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+    for (let i = 0; i <= 6; i++) {
+      // Monta a chave do form: form['ativo_0'], form['inicio_0']...
+      const keyAtivo = 'ativo_' + i;
+      const keyIni = 'inicio_' + i;
+      const keyFim = 'fim_' + i;
+
+      novosDados.push([
+        i,
+        nomesDias[i],
+        form[keyAtivo] || 'NAO',
+        form[keyIni] || '18:00',
+        form[keyFim] || '23:00'
+      ]);
+    }
+    // Grava novos horários
+    sheet.getRange(2, 1, 7, 5).setValues(novosDados);
+  }
+
+  return "Configurações salvas!";
+}
+
+function setupHorariosPadrao(sheet) {
+  const dias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+  const linhas = dias.map((d, i) => [i, d, 'SIM', '18:00', '23:00']);
+  sheet.getRange(2, 1, 7, 5).setValues(linhas);
+}
+
+// --- CRUD PARA O ADMIN ---
+
+function getHorariosAdmin() {
+  const ss = getPlanilha();
+  const sheet = getSheetOrCreate(ss, ABA_HORARIOS, ['DIA_ID', 'DIA_NOME', 'ABERTO', 'INICIO', 'FIM']);
+  if (sheet.getLastRow() <= 1) setupHorariosPadrao(sheet);
+
+  const dados = sheet.getDataRange().getValues();
+  dados.shift();
+
+  // Busca status manual
+  const confSheet = getSheet(ss, ABA_CONFIG);
+  const confData = confSheet.getDataRange().getValues();
+  const statusManual = confData.find(r => r[0] === 'StatusManual');
+
+  return {
+    lista: dados.map(r => ({ dia: r[0], nome: r[1], ativo: r[2], inicio: r[3], fim: r[4] })),
+    statusGlobal: statusManual ? statusManual[1] : 'AUTO'
+  };
+}
+
+/**
+ * Salva as configurações de horário com lógica de reescrita baseada no modo.
+ */
+function salvarConfigHorarios(form) {
+  const ss = getPlanilha();
+  const sheet = getSheet(ss, ABA_HORARIOS);
+  const confSheet = getSheet(ss, ABA_CONFIG);
+  const status = form.statusGlobal; // 'AUTO', 'ABERTO', 'FECHADO'
+
+  // 1. Salva Status Manual na aba Config
+  const confData = confSheet.getDataRange().getValues();
+  let found = false;
+  for (let i = 0; i < confData.length; i++) {
+    if (confData[i][0] === 'StatusManual') {
+      confSheet.getRange(i + 1, 2).setValue(status);
+      found = true; break;
+    }
+  }
+  if (!found) confSheet.appendRow(['StatusManual', status]);
+
+  // 2. Prepara os dados para a aba Horarios
+  const novosDados = [];
+  const nomesDias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+  for (let i = 0; i <= 6; i++) {
+    let ativo, inicio, fim;
+
+    if (status === 'ABERTO') {
+      // REGRA: Força tudo para SIM, 00:00 as 23:59
+      ativo = 'SIM';
+      inicio = '00:00';
+      fim = '23:59';
+    }
+    else if (status === 'FECHADO') {
+      // REGRA: Força tudo para NAO
+      ativo = 'NAO';
+      inicio = '00:00'; // Zera para ficar limpo
+      fim = '00:00';
+    }
+    else {
+      // REGRA AUTO: Lê o que o usuário digitou nos inputs
+      ativo = form[`ativo_${i}`] || 'NAO';
+      inicio = form[`inicio_${i}`] || '18:00';
+      fim = form[`fim_${i}`] || '23:00';
+    }
+
+    novosDados.push([
+      i,
+      nomesDias[i],
+      ativo,
+      inicio,
+      fim
+    ]);
+  }
+
+  // 3. Grava na Planilha
+  sheet.getRange(2, 1, 7, 5).setValues(novosDados);
+
+  return "Configurações e Horários atualizados!";
+}
+
+// ====================================================================
+// 🔍 MÓDULO DE BUSCA AVANÇADA (FILTROS)
+// ====================================================================
+
+/**
+ * Busca pedidos com base em critérios múltiplos.
+ * Lê a aba Vendas e filtra linha a linha.
+ */
+function buscarPedidosComFiltros(filtros) {
+  const ss = getPlanilha();
+  const aba = getSheet(ss, ABA_VENDAS);
+
+  // Se tiver poucas linhas, retorna vazio
+  if (aba.getLastRow() <= 1) return [];
+
+  const dados = aba.getDataRange().getDisplayValues();
+  dados.shift(); // Remove cabeçalho
+
+  // Mapeamento de colunas (Base 0 após shift)
+  // A=0(ID), B=1(Data), C=2(JSON), F=5(Nome), G=6(Tel), K=10(Bairro), O=14(Status), Q=16(Motoqueiro)
+
+  // Preparar Filtros (Normalização)
+  const termo = filtros.termo ? String(filtros.termo).toLowerCase() : "";
+  const bairro = filtros.bairro ? String(filtros.bairro).toLowerCase() : "";
+  const produto = filtros.produto ? String(filtros.produto).toLowerCase() : "";
+  const status = filtros.status || "";
+
+  // Datas
+  let dtIni = null, dtFim = null;
+  if (filtros.dataInicio) {
+    dtIni = new Date(filtros.dataInicio);
+    dtIni.setHours(0, 0, 0, 0);
+  }
+  if (filtros.dataFim) {
+    dtFim = new Date(filtros.dataFim);
+    dtFim.setHours(23, 59, 59, 999);
+  }
+
+  // Busca Motoqueiros para exibir nomes (Reuso da lógica anterior)
+  const mapMotos = {};
+  try {
+    const abaMotos = ss.getSheetByName(ABA_MOTOQUEIROS);
+    if (abaMotos) {
+      abaMotos.getDataRange().getValues().forEach(m => { if (m[0]) mapMotos[m[0]] = m[1]; });
+    }
+  } catch (e) { }
+
+  // FILTRAGEM
+  const resultados = dados.filter(row => {
+    // 1. Filtro de Status
+    if (status && status !== "TODOS" && row[14] !== status) return false;
+
+    // 2. Filtro de Data
+    if (dtIni || dtFim) {
+      let rowDt = new Date(row[1]);
+      // Tenta corrigir formato brasileiro se necessário
+      if (isNaN(rowDt.getTime()) && row[1].includes('/')) {
+        const parts = row[1].split(' ')[0].split('/');
+        rowDt = new Date(parts[2], parts[1] - 1, parts[0]);
+      }
+      if (dtIni && rowDt < dtIni) return false;
+      if (dtFim && rowDt > dtFim) return false;
+    }
+
+    // 3. Filtro de Bairro
+    if (bairro && !String(row[10]).toLowerCase().includes(bairro)) return false;
+
+    // 4. Filtro Texto (Nome, Telefone ou ID)
+    if (termo) {
+      const textoLinha = (String(row[0]) + " " + String(row[5]) + " " + String(row[6])).toLowerCase();
+      if (!textoLinha.includes(termo)) return false;
+    }
+
+    // 5. Filtro Produto (O mais pesado, verifica dentro do JSON)
+    if (produto) {
+      try {
+        const json = JSON.parse(row[2]);
+        const itens = Array.isArray(json) ? json : (json.itens || []);
+        // Verifica se ALGUM item tem o nome buscado
+        const temProd = itens.some(i => i.nome.toLowerCase().includes(produto));
+        if (!temProd) return false;
+      } catch (e) { return false; }
+    }
+
+    return true;
+  });
+
+  // Formata para o Frontend (Mesma estrutura do getPedidosCozinha para reusar o Card)
+  return resultados.map((row, i) => {
+    let itens = [];
+    try {
+      const j = JSON.parse(row[2]);
+      itens = Array.isArray(j) ? j : (j.itens || []);
+    } catch (e) { }
+
+    return {
+      rowIndex: -1, // Não editaremos histórico antigo, então index não é crítico aqui
+      id: row[0],
+      dataHora: row[1], // Envia como string mesmo
+      itens: itens,
+      total: row[3],
+      pagamento: row[4],
+      clienteNome: row[5],
+      clienteTel: row[6],
+      logradouro: row[7],
+      numero: row[8],
+      bairro: row[10],
+      status: row[14],
+      obs: row[15],
+      idMotoqueiro: row[16],
+      nomeMotoqueiro: mapMotos[row[16]] || ''
+    };
+  }).reverse(); // Mostra os mais recentes primeiro
+}
+
+/**
+ * Busca o histórico de movimentação de um pedido específico.
+ */
+function getHistoricoPedido(idPedido) {
+  try {
+    const ss = getPlanilha();
+    const sheet = getSheet(ss, ABA_LOG_PEDIDO);
+
+    if (sheet.getLastRow() <= 1) return [];
+
+    const dados = sheet.getDataRange().getValues(); // Leitura bruta
+    // Estrutura: [0]Data, [1]ID, [2]De, [3]Para, [4]IdUser, [5]NomeUser
+
+    const historico = dados
+      .filter(r => String(r[1]) === String(idPedido)) // Filtra pelo ID
+      .map(r => {
+        const dt = new Date(r[0]);
+        const dataF = dt.toLocaleDateString('pt-BR');
+        const horaF = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        return {
+          dataHora: `${dataF} às ${horaF}`,
+          status: r[3], // Status "PARA"
+          usuario: r[5] || 'Sistema'
+        };
+      });
+
+    return historico.reverse(); // Mais recente primeiro
+  } catch (e) {
+    return [];
+  }
+}
+
 // ====================================================================
 // [NOVO] ACESSO RÁPIDO AOS APPS (Links Dinâmicos)
 // ====================================================================
 
 // ⚠️ COLE AQUI O SEU LINK QUE FUNCIONA (O que termina em ...iz/exec)
-const URL_REAL = "https://script.google.com/macros/s/AKfycbymrpOtjNN3cD0seBOTpSCwSmy1vXrBkgTHUJa8cOblI0QN5YRR4ySeel-CBasLJ-iz/exec";
+const URL_REAL = "https://script.google.com/macros/s/AKfycbyvAhRn-C3HlEBWwmI5hP15X5xi0Uv_g2V1eNBnQDDZGqthdsaiWnMSrUQO5FFc6XK6/exec";
 
 function showSidebarLinkDelivery() {
   // Usa a URL fixa para garantir que abra o link certo
@@ -233,6 +608,85 @@ function abrirSidebarLink(titulo, url, texto) {
 
   const output = HtmlService.createHtmlOutput(html).setTitle(titulo).setWidth(300);
   SpreadsheetApp.getUi().showSidebar(output);
+}
+
+// ====================================================================
+// 🔐 MÓDULO V2: SEGURANÇA E AUDITORIA
+// ====================================================================
+
+/**
+ * Verifica credenciais para liberar acesso ao KDS.
+ */
+function autenticarUsuario(login, senha) {
+  const sheet = getSheetOrCreate(getPlanilha(), ABA_USUARIOS, ['ID_USUARIO', 'LOGIN', 'SENHA', 'NOME', 'FUNCAO', 'ATIVO']);
+  const dados = sheet.getDataRange().getValues();
+
+  // Procura usuário (Case insensitive no login)
+  // Coluna B=Login(1), C=Senha(2), D=Nome(3), E=Função(4), F=Ativo(5)
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][1]).toLowerCase() === String(login).toLowerCase() &&
+      String(dados[i][2]) === String(senha) &&
+      String(dados[i][5]) === 'SIM') {
+
+      return {
+        sucesso: true,
+        usuario: {
+          id: dados[i][0],
+          nome: dados[i][3],
+          funcao: dados[i][4]
+        }
+      };
+    }
+  }
+  throw new Error("Login ou senha inválidos.");
+}
+
+/**
+ * Registra movimentação do card (Quem fez o quê).
+ */
+function registrarLogAuditoria(idPedido, deStatus, paraStatus, idUsuario, nomeUsuario) {
+  try {
+    const sheet = getSheetOrCreate(getPlanilha(), ABA_LOG_PEDIDO, ['DATA_HORA', 'ID_PEDIDO', 'DE_STATUS', 'PARA_STATUS', 'ID_USUARIO_RESPONSAVEL', 'NOME_USUARIO']);
+    sheet.appendRow([new Date(), idPedido, deStatus, paraStatus, idUsuario, nomeUsuario]);
+  } catch (e) {
+    console.log("Erro ao auditar: " + e.message);
+  }
+}
+
+// --- CRUD DE USUÁRIOS (Para o Admin gerenciar a equipe) ---
+
+function getUsuariosAdmin() {
+  const sheet = getSheetOrCreate(getPlanilha(), ABA_USUARIOS, ['ID_USUARIO', 'LOGIN', 'SENHA', 'NOME', 'FUNCAO', 'ATIVO']);
+  const dados = sheet.getDataRange().getValues();
+  dados.shift();
+  return dados.map(r => ({ id: r[0], login: r[1], senha: r[2], nome: r[3], funcao: r[4], ativo: r[5] }));
+}
+
+function salvarUsuario(data) {
+  const sheet = getSheet(getPlanilha(), ABA_USUARIOS);
+  // Verifica duplicidade de login
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][1]).toLowerCase() === String(data.login).toLowerCase()) {
+      throw new Error("Login já existe.");
+    }
+  }
+
+  const id = `USR-${Date.now()}`;
+  sheet.appendRow([id, data.login, data.senha, data.nome, data.funcao, 'SIM']);
+  return "Usuário criado!";
+}
+
+function excluirUsuario(id) {
+  const sheet = getSheet(getPlanilha(), ABA_USUARIOS);
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return "Usuário removido.";
+    }
+  }
+  throw new Error("Usuário não encontrado.");
 }
 
 // ====================================================================
@@ -970,6 +1424,11 @@ function processarPedidoDelivery(jsonPedido) {
   }
 
   try {
+    //[NOVO] BLOQUEIO DE SEGURANÇA
+    const statusLoja = verificarStatusLoja();
+    if (!statusLoja.aberto) {
+      throw new Error(`🛑 A LOJA ESTÁ FECHADA.\nMotivo: ${statusLoja.mensagem}`);
+    }
     const pedido = JSON.parse(jsonPedido);
     const ss = getPlanilha();
     const abaVendas = getSheet(ss, ABA_VENDAS);
@@ -1166,23 +1625,20 @@ function gerarMensagemWhatsApp(ss, idVenda, pedido, totalProdutos, taxaEntrega, 
 
 /**
  * Busca pedidos das últimas 24h para o Monitor.
- * Versão Corrigida: Compatível com JSON Completo ou Lista Simples.
+ * CORREÇÃO: Mapeamento exato das colunas Referência (12) e Taxa (13).
  */
 function getPedidosCozinha() {
   const ss = getPlanilha();
   const aba = getSheet(ss, ABA_VENDAS);
 
-  // [NOVO] 1. Busca Motoqueiros para traduzir ID -> Nome
-  // Usa 'Motoqueiros' direto ou a constante ABA_MOTOQUEIROS se você definiu
+  // 1. Busca Motoqueiros
   let mapMotos = {};
   try {
-    const abaMotos = ss.getSheetByName('Motoqueiros');
+    const abaMotos = ss.getSheetByName(ABA_MOTOQUEIROS);
     if (abaMotos) {
-      const dadosMotos = abaMotos.getDataRange().getValues();
-      // Cria um dicionário: { 'MOT-123': 'João', ... }
-      dadosMotos.forEach(m => { if (m[0]) mapMotos[m[0]] = m[1]; });
+      abaMotos.getDataRange().getValues().forEach(m => { if (m[0]) mapMotos[m[0]] = m[1]; });
     }
-  } catch (e) { Logger.log("Erro ao ler motoqueiros: " + e.message); }
+  } catch (e) { }
 
   if (aba.getLastRow() <= 1) return [];
 
@@ -1194,7 +1650,7 @@ function getPedidosCozinha() {
 
   const pedidos = dados
     .map((row, index) => {
-      // 1. Parser de Data (Mantido)
+      // 1. Parser de Data
       const dataString = row[1];
       let dataPedido;
       if (dataString.includes('/')) {
@@ -1206,49 +1662,47 @@ function getPedidosCozinha() {
         dataPedido = new Date(dataString);
       }
 
-      // 2. Filtro de Tempo/Status (Mantido)
+      // 2. Filtro de Tempo
       const isRecent = (agora - dataPedido < limiteHoras);
       const isPending = (row[14] !== 'ENTREGUE' && row[14] !== 'CANCELADO');
       if (!isRecent && !isPending) return null;
 
-      // 3. Extração dos Itens (Mantido)
+      // 3. Extração do JSON
       let rawJson = null;
       let listaItens = [];
-
       try {
         rawJson = JSON.parse(row[2]);
-      } catch (e) {
-        rawJson = [];
-      }
-
-      if (rawJson) {
-        if (Array.isArray(rawJson)) {
-          listaItens = rawJson;
-        } else if (rawJson.itens && Array.isArray(rawJson.itens)) {
-          listaItens = rawJson.itens;
+        if (rawJson) {
+          if (Array.isArray(rawJson)) listaItens = rawJson;
+          else if (rawJson.itens) listaItens = rawJson.itens;
         }
-      }
+      } catch (e) { }
 
-      // [NOVO] 4. Identificação do Motoqueiro
-      // A coluna Q é o índice 16 (A=0 ... Q=16)
+      // 4. Identificação do Motoqueiro
       const idMoto = row[16];
       const nomeMoto = mapMotos[idMoto] || '';
 
+      // --- MAPEAMENTO DE COLUNAS (CRÍTICO) ---
+      // A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8, J=9, K=10, L=11, M=12, N=13...
       return {
-        rowIndex: index + 2,
         id: row[0],
         dataHora: dataPedido.toISOString(),
+        dataHoraTexto: row[1],
         itens: listaItens,
-        total: row[3],
-        pagamento: row[4],
-        clienteNome: row[5],
-        clienteTel: row[6],
-        logradouro: row[7],
-        numero: row[8],
-        bairro: row[10],
-        status: row[14],
-        obs: row[15],
-        // Novos campos para o Frontend ler:
+        total: row[3],        // Coluna D
+        pagamento: row[4],    // Coluna E
+        clienteNome: row[5],  // Coluna F
+        clienteTel: row[6],   // Coluna G
+        logradouro: row[7],   // Coluna H
+        numero: row[8],       // Coluna I
+        bairro: row[10],      // Coluna K
+
+        // AQUI ESTAVA O PROBLEMA: GARANTINDO ÍNDICES CERTOS
+        referencia: row[12],  // Coluna M (PONTO_REFERENCIA)
+        taxa: row[13],        // Coluna N (TAXA_ENTREGA)
+
+        status: row[14],      // Coluna O
+        obs: row[15],         // Coluna P
         idMotoqueiro: idMoto,
         nomeMotoqueiro: nomeMoto
       };
@@ -1260,19 +1714,15 @@ function getPedidosCozinha() {
 }
 
 /**
- * Atualiza o Status e executa lógicas de borda (Notificação ou Estorno).
+ * V2.0 - Atualiza Status com AUDITORIA e MOTOQUEIRO
+ * @param {string} idPedido
+ * @param {string} novoStatus
+ * @param {string} idMotoqueiro (Opcional)
+ * @param {object} usuarioLogadoObj {id, nome} (Obrigatório na V2)
  */
-/**
- * Atualiza o status do pedido e vincula motoqueiro se necessário.
- * @param {string} idPedido - ID da Venda
- * @param {string} novoStatus - Novo Status
- * @param {string} idMotoqueiro - (Opcional) ID do Motoqueiro para vincular
- */
-function atualizarStatusPedido(idPedido, novoStatus, idMotoqueiro) {
+function atualizarStatusPedido(idPedido, novoStatus, idMotoqueiro, usuarioLogadoObj) {
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) {
-    throw new Error('O sistema está ocupado. Tente novamente.');
-  }
+  if (!lock.tryLock(10000)) throw new Error('Sistema ocupado.');
 
   try {
     const ss = getPlanilha();
@@ -1283,7 +1733,7 @@ function atualizarStatusPedido(idPedido, novoStatus, idMotoqueiro) {
     let clienteTel = '';
     let clienteNome = '';
     let jsonPedidoOriginal = '';
-    let statusAtual = '';
+    let statusAtual = ''; // Variável existente que guarda o status "DE"
 
     // Busca o pedido pelo ID (Coluna A = índice 0)
     for (let i = 1; i < dados.length; i++) {
@@ -1307,22 +1757,28 @@ function atualizarStatusPedido(idPedido, novoStatus, idMotoqueiro) {
     // 1. Grava o Novo Status na Coluna 15 (O)
     aba.getRange(linha, 15).setValue(novoStatus);
 
-    // 2. LÓGICA DO MOTOQUEIRO (NOVO)
+    // 2. LÓGICA DO MOTOQUEIRO
     // Se o status for SAIU_ENTREGA e um ID for fornecido, grava na Coluna 17 (Q)
     if (novoStatus === 'SAIU_ENTREGA' && idMotoqueiro) {
-      // Coluna 17 corresponde à letra Q
       aba.getRange(linha, 17).setValue(idMotoqueiro);
       Logger.log(`[DELIVERY] Motoqueiro ${idMotoqueiro} vinculado ao pedido ${idPedido}`);
     }
 
-    // 3. Lógica de Estorno (Se for cancelamento)
+    // 3. LÓGICA DE AUDITORIA (NOVO BLOCO INSERIDO)
+    // Verifica se temos o objeto do usuário logado e registra o log
+    if (usuarioLogadoObj) {
+      // Usa as variáveis existentes: statusAtual (DE) e novoStatus (PARA)
+      registrarLogAuditoria(idPedido, statusAtual, novoStatus, usuarioLogadoObj.id, usuarioLogadoObj.nome);
+    }
+
+    // 4. Lógica de Estorno (Se for cancelamento)
     if (novoStatus === 'CANCELADO') {
       estornarEstoquePedido(ss, jsonPedidoOriginal, idPedido);
     }
 
     SpreadsheetApp.flush();
 
-    // 4. Lógica de Notificação WhatsApp
+    // 5. Lógica de Notificação WhatsApp
     let linkZap = null;
     if (clienteTel && (novoStatus === 'PREPARANDO' || novoStatus === 'SAIU_ENTREGA')) {
       const num = String(clienteTel).replace(/\D/g, '');
@@ -1332,7 +1788,6 @@ function atualizarStatusPedido(idPedido, novoStatus, idMotoqueiro) {
         texto = `Olá ${clienteNome}! 👨‍🍳 Seu pedido *${idPedido}* começou a ser preparado.`;
       } else if (novoStatus === 'SAIU_ENTREGA') {
         texto = `🛵 Saiu para entrega! O pedido *${idPedido}* está a caminho.`;
-        // Opcional: Se quiser incluir o nome do motoqueiro na mensagem, precisaria buscar o nome pelo ID aqui
       }
 
       if (num.length >= 10) {
@@ -2820,6 +3275,166 @@ function getHtmlTemplate(templateName) {
 
           window.onload = init;
        </script>
+    </body></html>`;
+  }
+
+  // >>> TELA: Gerenciar Usuários (NOVO)
+  else if (templateName === 'GerenciarUsuarios') {
+    html = `<html>${head}<body>
+      <h3 class="font-bold text-lg mb-4 text-gray-800">Equipe KDS</h3>
+      <form id="main-form" class="space-y-3 bg-white p-3 border rounded shadow-sm">
+         <input name="nome" placeholder="Nome (Ex: Maria Cozinheira)" required class="w-full border p-2 rounded">
+         <div class="grid grid-cols-2 gap-2">
+            <input name="login" placeholder="Login" required class="w-full border p-2 rounded">
+            <input name="senha" placeholder="Senha" required class="w-full border p-2 rounded">
+         </div>
+         <select name="funcao" class="w-full border p-2 rounded bg-white">
+            <option value="COZINHA">Cozinha</option>
+            <option value="EXPEDICAO">Expedição</option>
+            <option value="ADMIN">Admin</option>
+         </select>
+         <button id="btn-submit" class="w-full bg-blue-600 text-white font-bold p-2 rounded">Criar Usuário</button>
+      </form>
+      <div id="msg"></div>
+      <ul id="list" class="mt-4 space-y-2 text-sm">Loading...</ul>
+      ${getScriptForm('salvarUsuario')}
+      <script>
+         function load(){
+            google.script.run.withSuccessHandler(l => {
+               const list = document.getElementById('list');
+               list.innerHTML = l.map(u => \`
+                  <li class="flex justify-between bg-white p-2 border rounded">
+                     <div>
+                        <div class="font-bold">\${u.nome}</div>
+                        <div class="text-xs text-gray-500">\${u.funcao} (Login: \${u.login})</div>
+                     </div>
+                     <button onclick="del('\${u.id}')" class="text-red-500 font-bold">X</button>
+                  </li>
+               \`).join('');
+            }).getUsuariosAdmin();
+         }
+         function del(id){ if(confirm('Apagar usuário?')) google.script.run.withSuccessHandler(load).excluirUsuario(id); }
+         window.onload = load;
+      </script>
+    </body></html>`;
+  }
+
+  // >>> TELA: Gerenciar Horários (CORRIGIDO E BLINDADO)
+  else if (templateName === 'GerenciarHorarios') {
+    html = `<html>${head}<body class="bg-gray-50 p-2">
+      <form id="main-form" class="space-y-4">
+         
+         <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+            <h3 class="font-bold text-gray-800 mb-2">Modo de Funcionamento</h3>
+            <div class="grid grid-cols-3 gap-2">
+               <label class="cursor-pointer">
+                  <input type="radio" name="statusGlobal" value="AUTO" class="peer sr-only" onchange="toggleGrid()">
+                  <div class="p-2 text-center rounded border peer-checked:bg-blue-600 peer-checked:text-white hover:bg-gray-100">
+                     <div class="font-bold">⏰ AUTO</div><div class="text-[10px]">Segue Tabela</div>
+                  </div>
+               </label>
+               <label class="cursor-pointer">
+                  <input type="radio" name="statusGlobal" value="ABERTO" class="peer sr-only" onchange="toggleGrid()">
+                  <div class="p-2 text-center rounded border peer-checked:bg-green-600 peer-checked:text-white hover:bg-gray-100">
+                     <div class="font-bold">🔓 ABERTO</div><div class="text-[10px]">Forçar 24h</div>
+                  </div>
+               </label>
+               <label class="cursor-pointer">
+                  <input type="radio" name="statusGlobal" value="FECHADO" class="peer sr-only" onchange="toggleGrid()">
+                  <div class="p-2 text-center rounded border peer-checked:bg-red-600 peer-checked:text-white hover:bg-gray-100">
+                     <div class="font-bold">🔒 FECHADO</div><div class="text-[10px]">Forçar Fecho</div>
+                  </div>
+               </label>
+            </div>
+         </div>
+
+         <div id="container-grid" class="bg-white p-4 rounded-lg shadow border border-gray-200 hidden">
+            <div class="flex justify-between items-center mb-3 border-b pb-2">
+               <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                  <span class="material-icons text-sm">calendar_today</span> Tabela de Horários
+               </h3>
+               <button type="button" onclick="resetPadrao()" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-gray-700 font-bold">
+                  Restaurar Padrão
+               </button>
+            </div>
+            <div id="grid-dias" class="space-y-2 text-sm">Carregando...</div>
+         </div>
+
+         <div id="msg-manual" class="hidden p-3 bg-blue-50 text-blue-800 text-sm rounded border border-blue-200 text-center">
+            <p class="font-bold">Modo Manual Ativo</p>
+            <p class="text-xs mt-1">A tabela de horários será ignorada.</p>
+         </div>
+
+         <button id="btn-submit" class="w-full bg-indigo-600 text-white py-3 rounded font-bold shadow hover:bg-indigo-700">SALVAR CONFIGURAÇÃO</button>
+      </form>
+      <div id="loader" class="loader hidden mt-4"></div>
+      <div id="msg"></div>
+
+      ${getScriptForm('salvarConfigHorarios')}
+      
+      <script>
+         function load() {
+            google.script.run.withSuccessHandler(d => {
+               // 1. Marca Status
+               const radios = document.getElementsByName('statusGlobal');
+               radios.forEach(r => { if(r.value === d.statusGlobal) r.checked = true; });
+
+               // 2. Monta Tabela
+               const div = document.getElementById('grid-dias');
+               div.innerHTML = '';
+               
+               if(d.lista && d.lista.length > 0) {
+                  d.lista.forEach(day => {
+                     const isChecked = day.ativo === 'SIM' ? 'checked' : '';
+                     let ini = formatTimeSafe(day.inicio);
+                     let fim = formatTimeSafe(day.fim);
+
+                     div.innerHTML += \`
+                        <div class="flex items-center gap-2 border-b pb-2 last:border-0">
+                           <label class="flex items-center w-24 cursor-pointer">
+                              <input type="checkbox" name="ativo_\${day.dia}" value="SIM" \${isChecked} class="w-4 h-4 text-indigo-600 rounded mr-2">
+                              <span class="font-bold text-gray-700">\${day.nome.substr(0,3)}</span>
+                           </label>
+                           <input type="time" name="inicio_\${day.dia}" value="\${ini}" class="w-24 border p-1 rounded text-center bg-gray-50 focus:bg-white">
+                           <span class="text-gray-400 text-xs">até</span>
+                           <input type="time" name="fim_\${day.dia}" value="\${fim}" class="w-24 border p-1 rounded text-center bg-gray-50 focus:bg-white">
+                        </div>\`;
+                  });
+               }
+               toggleGrid();
+            }).getHorariosAdmin();
+         }
+         
+         function toggleGrid() {
+            const status = document.querySelector('input[name="statusGlobal"]:checked').value;
+            const grid = document.getElementById('container-grid');
+            const msg = document.getElementById('msg-manual');
+            
+            if (status === 'AUTO') { grid.classList.remove('hidden'); msg.classList.add('hidden'); }
+            else { grid.classList.add('hidden'); msg.classList.remove('hidden'); }
+         }
+         
+         function formatTimeSafe(val) {
+            try {
+               if(!val) return "18:00";
+               // Se for objeto Date (Sheets)
+               if(typeof val === 'object') return val.getHours().toString().padStart(2,'0')+':'+val.getMinutes().toString().padStart(2,'0');
+               // Se for string
+               let s = String(val).trim();
+               if(s.length > 5) return s.substr(0,5); // Corta segundos ou datas longas
+               return s;
+            } catch(e) { return "00:00"; }
+         }
+
+         function resetPadrao() {
+            if(!confirm('Isso vai definir todos os dias para 18:00 às 23:00. Continuar?')) return;
+            document.querySelectorAll('input[type="time"][name^="inicio"]').forEach(i => i.value = "18:00");
+            document.querySelectorAll('input[type="time"][name^="fim"]').forEach(i => i.value = "23:00");
+            document.querySelectorAll('input[type="checkbox"][name^="ativo"]').forEach(c => c.checked = true);
+         }
+
+         window.onload = load;
+      </script>
     </body></html>`;
   }
 
